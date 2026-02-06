@@ -22,8 +22,7 @@ chmod +x umami_apprise_notifier.py
 # Run directly — uv resolves deps automatically on first invocation
 ./umami_apprise_notifier.py \
     --umami-url https://analytics.example.com \
-    --umami-user admin \
-    --umami-password changeme \
+    --umami-api-key your-api-key-here \
     --website-id xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
     --since 5 \
     --apprise-url "tgram://bottoken/ChatID"
@@ -34,8 +33,9 @@ chmod +x umami_apprise_notifier.py
 | Option              | Env var              | Description                                               |
 |---------------------|----------------------|-----------------------------------------------------------|
 | `--umami-url`       | `UMAMI_URL`          | Base URL of your Umami instance                           |
-| `--umami-user`      | `UMAMI_USER`         | Umami API username                                        |
-| `--umami-password`  | `UMAMI_PASSWORD`     | Umami API password                                        |
+| `--umami-api-key`   | `UMAMI_API_KEY`      | Umami API key (preferred, no login round-trip needed)      |
+| `--umami-user`      | `UMAMI_USER`         | Umami API username (fallback when no API key)              |
+| `--umami-password`  | `UMAMI_PASSWORD`     | Umami API password (fallback when no API key)              |
 | `--website-id`      | `UMAMI_WEBSITE_ID`   | Website ID to monitor                                     |
 | `--since`           | `UMAMI_SINCE`        | Lookback window in minutes (default: 5, used on 1st run)  |
 | `--apprise-url`     | `APPRISE_URL`        | Apprise URL(s) — repeatable for multiple targets          |
@@ -43,6 +43,8 @@ chmod +x umami_apprise_notifier.py
 | `--verbose`         | `UMAMI_VERBOSE`      | Enable debug logging                                      |
 
 Options can be passed as CLI arguments, environment variables, or a mix of both.
+
+**Authentication:** supply either `--umami-api-key` (preferred) or both `--umami-user` and `--umami-password`.
 
 ### State
 
@@ -58,15 +60,14 @@ crontab -e
 ```
 
 ```cron
-*/5 * * * * /full/path/to/umami_apprise_notifier.py --umami-url https://analytics.example.com --umami-user admin --umami-password changeme --website-id xxxxxxxx --since 5 --apprise-url "tgram://bottoken/ChatID"
+*/5 * * * * /full/path/to/umami_apprise_notifier.py --umami-url https://analytics.example.com --umami-api-key your-api-key --website-id xxxxxxxx --since 5 --apprise-url "tgram://bottoken/ChatID"
 ```
 
 Or, if you prefer environment variables to avoid long lines:
 
 ```cron
 UMAMI_URL=https://analytics.example.com
-UMAMI_USER=admin
-UMAMI_PASSWORD=changeme
+UMAMI_API_KEY=your-api-key
 UMAMI_WEBSITE_ID=xxxxxxxx
 UMAMI_SINCE=5
 APPRISE_URL=tgram://bottoken/ChatID
