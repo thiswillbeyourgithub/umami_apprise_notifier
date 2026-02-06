@@ -1,0 +1,17 @@
+[Unit]
+Description=Run Umami Apprise Notifier every 5 minutes
+
+[Timer]
+# Start 1 minute after boot, then every 5 minutes.
+OnBootSec=1min
+OnUnitActiveSec=5min
+
+# Spread timer activations across a 30 s window to avoid thundering herd
+# on shared hosts running many timers at the same interval.
+RandomizedDelaySec=30s
+
+# Persist the last trigger time across reboots so a missed run is caught up.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

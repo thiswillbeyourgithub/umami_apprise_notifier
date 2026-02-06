@@ -1,0 +1,31 @@
+[Unit]
+Description=Check Umami analytics for recent visitors and notify via Apprise
+# Only run if the network is up, since we need to reach the Umami API.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# Load credentials and configuration from a protected env file.
+# Copy the .env.example to this path and fill in your values.
+EnvironmentFile=/etc/umami-apprise-notifier.env
+
+# uv must be on PATH — adjust if installed elsewhere.
+ExecStart=/usr/bin/env uv run %h/.local/bin/umami_apprise_notifier.py \
+    --umami-url ${UMAMI_URL} \
+    --umami-user ${UMAMI_USER} \
+    --umami-password ${UMAMI_PASSWORD} \
+    --website-id ${UMAMI_WEBSITE_ID} \
+    --since ${UMAMI_SINCE} \
+    --apprise-url ${APPRISE_URL}
+
+# Harden the service
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+# Allow writing state to ~/.local/share/umami-apprise-notifier/
+ReadWritePaths=%h/.local/share/umami-apprise-notifier
+
+[Install]
+WantedBy=multi-user.target
