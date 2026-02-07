@@ -30,7 +30,6 @@ from pathlib import Path
 import apprise
 import click
 import umami
-import umami.impl
 from loguru import logger
 from platformdirs import user_data_dir
 
@@ -126,22 +125,16 @@ def _save_last_check(*, website_id: str, timestamp: datetime) -> None:
     help="Base URL of your Umami instance (e.g. https://analytics.example.com).",
 )
 @click.option(
-    "--umami-api-key",
-    default=None,
-    envvar="UMAMI_API_KEY",
-    help="Umami API key (preferred over user/password; skips login call).",
-)
-@click.option(
     "--umami-user",
-    default=None,
+    required=True,
     envvar="UMAMI_USER",
-    help="Umami username for API authentication (ignored when --umami-api-key is set).",
+    help="Umami username for API authentication.",
 )
 @click.option(
     "--umami-password",
-    default=None,
+    required=True,
     envvar="UMAMI_PASSWORD",
-    help="Umami password for API authentication (ignored when --umami-api-key is set).",
+    help="Umami password for API authentication.",
 )
 @click.option(
     "--website-id",
@@ -180,9 +173,8 @@ def _save_last_check(*, website_id: str, timestamp: datetime) -> None:
 )
 def main(
     umami_url: str,
-    umami_api_key: str | None,
-    umami_user: str | None,
-    umami_password: str | None,
+    umami_user: str,
+    umami_password: str,
     website_id: str,
     since: int,
     apprise_url: tuple[str, ...],
@@ -194,10 +186,6 @@ def main(
     Queries the Umami analytics API for visitor activity in a recent time
     window.  If any visitors are detected, sends a notification to all
     configured Apprise targets.
-
-    Authentication: supply either ``--umami-api-key`` (preferred) or both
-    ``--umami-user`` and ``--umami-password``.  When an API key is provided
-    it is injected directly into the library — no login round-trip needed.
 
     The query window starts from the *later* of (a) the stored last-check
     timestamp, or (b) now minus ``--since`` minutes.  This avoids duplicate
@@ -224,27 +212,12 @@ def main(
         logger.debug("No prior state, falling back to --since={} min", since)
 
     # -- Authenticate ------------------------------------------------------
-    # Two modes: API key (preferred, no round-trip) or user/password login.
-    # The umami-analytics library doesn't expose an API-key setter, so we
-    # inject the key directly into its internal auth_token global — every
-    # subsequent call then sends it as ``Authorization: Bearer <key>``.
     logger.debug("Connecting to Umami at {}", umami_url)
-    umami.set_url_base(umami_url)
-
-    if umami_api_key:
-        logger.debug("Using API key authentication (no login round-trip)")
-        umami.impl.auth_token = umami_api_key
-    elif umami_user and umami_password:
-        logger.debug("Logging in with username/password")
-        try:
-            umami.login(umami_user, umami_password)
-        except Exception as exc:
-            logger.error("Umami authentication failed: {}", exc)
-            sys.exit(1)
-    else:
-        logger.error(
-            "Supply either --umami-api-key or both --umami-user and --umami-password."
-        )
+    try:
+        umami.set_url_base(umami_url)
+        umami.login(umami_user, umami_password)
+    except Exception as exc:
+        logger.error("Umami authentication failed: {}", exc)
         sys.exit(1)
 
     # -- Fetch stats -------------------------------------------------------

@@ -12,10 +12,13 @@ Type=oneshot
 EnvironmentFile=/etc/umami-apprise-notifier.env
 
 # uv must be on PATH — adjust if installed elsewhere.
-# All options are read from environment variables (see EnvironmentFile above),
-# so no CLI flags are needed here.  The script picks up UMAMI_API_KEY (or
-# UMAMI_USER + UMAMI_PASSWORD as fallback), UMAMI_URL, etc. automatically.
-ExecStart=/usr/bin/env uv run %h/.local/bin/umami_apprise_notifier.py
+ExecStart=/usr/bin/env uv run %h/.local/bin/umami_apprise_notifier.py \
+    --umami-url ${UMAMI_URL} \
+    --umami-user ${UMAMI_USER} \
+    --umami-password ${UMAMI_PASSWORD} \
+    --website-id ${UMAMI_WEBSITE_ID} \
+    --since ${UMAMI_SINCE} \
+    --apprise-url ${APPRISE_URL}
 
 # Harden the service
 NoNewPrivileges=true
