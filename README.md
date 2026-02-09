@@ -1,8 +1,8 @@
 # Umami Apprise Notifier
 
-A small Python script that periodically checks [Umami](https://umami.is/) analytics for recent visitors and sends notifications via [Apprise](https://github.com/caronc/apprise) (Telegram, Slack, email, 90+ services).
+A small Python script that periodically checks [Umami](https://umami.is/) analytics for recent visitors and sends detailed notifications via [Apprise](https://github.com/caronc/apprise) (Telegram, Slack, email, 90+ services).
 
-Designed to be run on a schedule (cron, systemd timer). Each run queries the Umami API for the time window since the last check, and fires a notification only when visitors are detected — no spam, no overlapping windows.
+Designed to be run on a schedule (cron, systemd timer). Each run queries the Umami API for the time window since the last check, and fires a notification only when visitors are detected — no spam, no overlapping windows. Notifications include breakdowns by page, referrer, country, city, OS, browser, and device via the Umami [reports API](https://umami.is/docs/api/reports).
 
 ## License
 
@@ -113,19 +113,36 @@ journalctl --user -u umami-apprise-notifier.service -f
 ## How it works
 
 ```
- ┌──────────┐         ┌──────────┐         ┌──────────┐
- │  Timer / │  runs   │  Script  │ queries │  Umami   │
- │  Cron    │────────>│          │────────>│  API     │
- └──────────┘         │          │         └──────────┘
-                      │          │
-                      │ visitors │
-                      │   > 0 ?  │
+ ┌──────────┐         ┌──────────┐  stats  ┌──────────┐
+ │  Timer / │  runs   │  Script  │────────>│  Umami   │
+ │  Cron    │────────>│          │<────────│  API     │
+ └──────────┘         │          │         │          │
+                      │ visitors │         │          │
+                      │   > 0 ?  │ reports │          │
+                      │    │     │────────>│          │
+                      │   yes    │<────────│          │
+                      │    │     │         └──────────┘
                       │    │     │
-                      │   yes    │
                       │    │     │         ┌──────────┐
                       │    └─────│────────>│ Apprise  │──> Telegram, Slack, …
                       │          │ notify  └──────────┘
                       └──────────┘
+```
+
+The notification includes a detailed breakdown:
+
+```
+Umami: visitors detected
+
+3 unique visitor(s), 5 pageview(s), 4 visit(s) between 10:00 and 10:05 UTC.
+
+Pages: / (3), /about (2)
+Referrers: google.com (2), (direct) (1)
+Countries: US (2), DE (1)
+Cities: Berlin (1), New York (1)
+Operating Systems: Mac OS (2), Windows 10 (1)
+Browsers: Chrome (2), Firefox (1)
+Devices: Desktop (2), Mobile (1)
 ```
 
 ---
