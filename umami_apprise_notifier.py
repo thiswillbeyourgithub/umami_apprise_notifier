@@ -324,7 +324,8 @@ def _build_notification_body(
             f"{stats.visitors} unique visitor(s), "
             f"{stats.pageviews} pageview(s), "
             f"{stats.visits} visit(s) "
-            f"between {start_at.strftime('%H:%M')} and {now.strftime('%H:%M UTC')}."
+            f"between {start_at.astimezone().strftime('%H:%M')}"
+            f" and {now.astimezone().strftime('%H:%M %Z')}."
         ),
         "",  # blank separator
     ]
@@ -469,8 +470,8 @@ def main(
         stats.visitors,
         stats.pageviews,
         stats.visits,
-        start_at.strftime("%H:%M"),
-        now.strftime("%H:%M UTC"),
+        start_at.astimezone().strftime("%H:%M"),
+        now.astimezone().strftime("%H:%M %Z"),
     )
 
     # Persist timestamp *after* a successful query so the next run picks up
