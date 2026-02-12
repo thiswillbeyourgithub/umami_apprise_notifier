@@ -139,7 +139,7 @@ _BREAKDOWN_FIELDS: list[tuple[str, str, str]] = [
 ]
 
 # Cap per category to keep notifications readable on mobile/Telegram.
-_MAX_BREAKDOWN_ITEMS = 5
+_MAX_BREAKDOWN_ITEMS = 50
 
 
 def _fetch_breakdown(
