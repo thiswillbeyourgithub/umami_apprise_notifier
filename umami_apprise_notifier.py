@@ -167,18 +167,6 @@ def _headers() -> dict:
     )
 
 
-def _verify_auth() -> None:
-    """Verify that the current authentication credentials are valid.
-
-    Calls ``POST /api/auth/verify`` and raises on failure.
-    """
-    url = f"{_auth_state['url_base']}/api/auth/verify"
-    resp = httpx.post(url, headers=_headers(), timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
-    logger.debug("Auth verified: user={}, role={}", data.get("username"), data.get("role"))
-
-
 def _fetch_breakdown(
     *,
     website_id: str,
@@ -540,13 +528,6 @@ def main(
         except Exception as exc:
             logger.opt(exception=True).error("Umami authentication failed: {}", exc)
             sys.exit(1)
-
-    # -- Verify credentials ------------------------------------------------
-    try:
-        _verify_auth()
-    except httpx.HTTPStatusError as exc:
-        logger.error("Auth verification failed (HTTP {}): {}", exc.response.status_code, exc)
-        sys.exit(1)
 
     # -- Fetch stats -------------------------------------------------------
     logger.debug(
