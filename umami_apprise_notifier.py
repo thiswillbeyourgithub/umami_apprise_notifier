@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "umami-analytics",  # only needed for username/password auth
+#     "umami-analytics",
 #     "apprise",
 #     "click",
 #     "platformdirs",
@@ -33,11 +33,12 @@ import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from types import SimpleNamespace
 
 import apprise
 import click
 import httpx
+import umami
+import umami.impl as _umami_impl
 from loguru import logger
 from platformdirs import user_data_dir
 
@@ -141,32 +142,6 @@ _BREAKDOWN_FIELDS: list[tuple[str, str, str]] = [
 _MAX_BREAKDOWN_ITEMS = 50
 
 
-def _make_headers(*, api_key: str | None, auth_token: str | None) -> dict:
-    """Build HTTP headers for Umami API requests.
-
-    When *api_key* is provided it takes precedence (``x-umami-api-key``
-    header).  Otherwise the Bearer *auth_token* obtained via
-    ``umami.login()`` is used.
-    """
-    headers: dict[str, str] = {"Accept": "application/json"}
-    if api_key:
-        headers["x-umami-api-key"] = api_key
-    else:
-        headers["Authorization"] = f"Bearer {auth_token}"
-    return headers
-
-
-# Module-level state set during authentication (see ``main``).
-_auth_state: dict = {"url_base": None, "auth_token": None, "api_key": None}
-
-
-def _headers() -> dict:
-    """Convenience: build headers from current module-level auth state."""
-    return _make_headers(
-        api_key=_auth_state["api_key"], auth_token=_auth_state["auth_token"]
-    )
-
-
 def _fetch_breakdown(
     *,
     website_id: str,
@@ -176,9 +151,10 @@ def _fetch_breakdown(
 ) -> list[dict]:
     """Fetch a single breakdown dimension from the Umami reports API.
 
-    Calls ``POST /api/reports/breakdown`` with one field at a time,
-    keeping each result set clean (no cross-product of multiple
-    dimensions).
+    Uses the auth token already stored by ``umami.login()`` in the
+    ``umami.impl`` module to call ``POST /api/reports/breakdown`` with
+    one field at a time, keeping each result set clean (no cross-product
+    of multiple dimensions).
 
     Parameters
     ----------
@@ -197,7 +173,11 @@ def _fetch_breakdown(
         Raw breakdown rows from Umami, each containing the field value
         plus metrics like ``visitors``, ``views``, etc.
     """
-    url = f"{_auth_state['url_base']}/api/reports/breakdown"
+    url = f"{_umami_impl.url_base}/api/reports/breakdown"
+    headers = {
+        "Authorization": f"Bearer {_umami_impl.auth_token}",
+        "Content-Type": "application/json",
+    }
     payload = {
         "websiteId": website_id,
         "type": "breakdown",
@@ -208,36 +188,9 @@ def _fetch_breakdown(
             "fields": [field],
         },
     }
-    resp = httpx.post(url, json=payload, headers=_headers(), timeout=30)
+    resp = httpx.post(url, json=payload, headers=headers, timeout=30)
     resp.raise_for_status()
     return resp.json()
-
-
-def _fetch_stats_raw(
-    *,
-    website_id: str,
-    start_at: datetime,
-    end_at: datetime,
-) -> SimpleNamespace:
-    """Fetch website stats via the Umami REST API (no umami-analytics lib).
-
-    Returns a ``SimpleNamespace`` with ``.visitors``, ``.pageviews``,
-    ``.visits`` attributes — compatible with the ``WebsiteStats`` object
-    returned by the umami-analytics library.
-    """
-    url = f"{_auth_state['url_base']}/api/websites/{website_id}/stats"
-    params = {
-        "startAt": int(start_at.timestamp() * 1000),
-        "endAt": int(end_at.timestamp() * 1000),
-    }
-    resp = httpx.get(url, headers=_headers(), params=params, timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
-    return SimpleNamespace(
-        visitors=data.get("visitors", {}).get("value", 0),
-        pageviews=data.get("pageviews", {}).get("value", 0),
-        visits=data.get("visits", {}).get("value", 0),
-    )
 
 
 def _fetch_all_breakdowns(
@@ -404,21 +357,15 @@ def _build_notification_body(
 )
 @click.option(
     "--umami-user",
-    default=None,
+    required=True,
     envvar="UMAMI_USER",
-    help="Umami username (required unless --api-key is provided).",
+    help="Umami username for API authentication.",
 )
 @click.option(
     "--umami-password",
-    default=None,
+    required=True,
     envvar="UMAMI_PASSWORD",
-    help="Umami password (required unless --api-key is provided).",
-)
-@click.option(
-    "--api-key",
-    default=None,
-    envvar="UMAMI_API_KEY",
-    help="Umami API key. Alternative to username/password authentication.",
+    help="Umami password for API authentication.",
 )
 @click.option(
     "--website-id",
@@ -457,9 +404,8 @@ def _build_notification_body(
 )
 def main(
     umami_url: str,
-    umami_user: str | None,
-    umami_password: str | None,
-    api_key: str | None,
+    umami_user: str,
+    umami_password: str,
     website_id: str,
     since: int,
     apprise_url: tuple[str, ...],
@@ -472,10 +418,6 @@ def main(
     window.  If any visitors are detected, sends a notification to all
     configured Apprise targets.
 
-    Authentication can use either username/password (via the umami-analytics
-    library) or an API key (via raw HTTP requests).  When --api-key is
-    provided, --umami-user and --umami-password are not required.
-
     The query window starts from the *later* of (a) the stored last-check
     timestamp, or (b) now minus ``--since`` minutes.  This avoids duplicate
     notifications when the script runs more frequently than ``--since``.
@@ -485,15 +427,6 @@ def main(
     # -- Logging -----------------------------------------------------------
     logger.remove()
     logger.add(sys.stderr, level="DEBUG" if verbose else "INFO")
-
-    # -- Validate auth options ---------------------------------------------
-    if not api_key and not (umami_user and umami_password):
-        logger.error(
-            "Either --api-key or both --umami-user and --umami-password must be provided."
-        )
-        sys.exit(1)
-
-    use_api_key = api_key is not None
 
     # -- Time window -------------------------------------------------------
     now = datetime.now(tz=timezone.utc)
@@ -510,42 +443,24 @@ def main(
         logger.debug("No prior state, falling back to --since={} min", since)
 
     # -- Authenticate ------------------------------------------------------
-    # Store URL base in module-level state (used by _headers / _fetch_*).
-    _auth_state["url_base"] = umami_url.rstrip("/")
-
-    if use_api_key:
-        logger.debug("Using API key authentication against {}", umami_url)
-        _auth_state["api_key"] = api_key
-    else:
-        logger.debug("Using username/password authentication against {}", umami_url)
-        try:
-            import umami
-            import umami.impl as _umami_impl
-
-            umami.set_url_base(umami_url)
-            umami.login(umami_user, umami_password)
-            _auth_state["auth_token"] = _umami_impl.auth_token
-        except Exception as exc:
-            logger.opt(exception=True).error("Umami authentication failed: {}", exc)
-            sys.exit(1)
+    logger.debug("Connecting to Umami at {}", umami_url)
+    try:
+        umami.set_url_base(umami_url)
+        umami.login(umami_user, umami_password)
+    except Exception as exc:
+        logger.opt(exception=True).error("Umami authentication failed: {}", exc)
+        sys.exit(1)
 
     # -- Fetch stats -------------------------------------------------------
     logger.debug(
         "Querying stats for website {} from {} to {}", website_id, start_at, now
     )
     try:
-        if use_api_key:
-            stats = _fetch_stats_raw(
-                website_id=website_id, start_at=start_at, end_at=now
-            )
-        else:
-            import umami
-
-            stats = umami.website_stats(
-                start_at=start_at,
-                end_at=now,
-                website_id=website_id,
-            )
+        stats = umami.website_stats(
+            start_at=start_at,
+            end_at=now,
+            website_id=website_id,
+        )
     except Exception as exc:
         logger.opt(exception=True).error("Failed to fetch website stats: {}", exc)
         sys.exit(1)
