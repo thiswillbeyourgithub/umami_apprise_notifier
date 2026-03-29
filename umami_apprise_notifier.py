@@ -231,7 +231,7 @@ def _fetch_all_breakdowns(
             results[field] = rows
             logger.debug("Breakdown '{}': {} row(s)", field, len(rows))
         except Exception as exc:
-            logger.warning("Failed to fetch breakdown '{}': {}", field, exc)
+            logger.opt(exception=True).warning("Failed to fetch breakdown '{}': {}", field, exc)
             results[field] = []
     return results
 
@@ -448,7 +448,7 @@ def main(
         umami.set_url_base(umami_url)
         umami.login(umami_user, umami_password)
     except Exception as exc:
-        logger.error("Umami authentication failed: {}", exc)
+        logger.opt(exception=True).error("Umami authentication failed: {}", exc)
         sys.exit(1)
 
     # -- Fetch stats -------------------------------------------------------
@@ -462,7 +462,7 @@ def main(
             website_id=website_id,
         )
     except Exception as exc:
-        logger.error("Failed to fetch website stats: {}", exc)
+        logger.opt(exception=True).error("Failed to fetch website stats: {}", exc)
         sys.exit(1)
 
     logger.info(
