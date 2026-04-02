@@ -130,6 +130,8 @@ def _save_last_check(*, website_id: str, timestamp: datetime) -> None:
 # "visitors" is used for all other dimensions since we care about unique people.
 _BREAKDOWN_FIELDS: list[tuple[str, str, str]] = [
     ("path", "Pages", "views"),
+    ("query", "Query Params", "views"),
+    ("hostname", "Hostnames", "visitors"),
     ("referrer", "Referrers", "visitors"),
     ("country", "Countries", "visitors"),
     ("city", "Cities", "visitors"),
